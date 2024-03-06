@@ -16,6 +16,5 @@
  * 服务端主函数
  */
 int main(void){
-    int a = 123;
     return 0;
 }
