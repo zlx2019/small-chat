@@ -2,7 +2,7 @@
 
 #ifndef CHATLIB_H
 #define CHATLIB_H
-
+#include <stdio.h>
 
 /* ===================== Networking ===================== */
 /* 创建TCP服务，返回监听文件描述符 */
