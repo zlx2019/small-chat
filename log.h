@@ -1,7 +1,5 @@
 #include <stdio.h>
 
-/* out log file */
-
 #define LOG_COLOR "\033[0m"
 #define INFO_COLOR "\033[0;32m"
 #define DEBUG_COLOR "\033[0;33m"
