@@ -1,7 +1,8 @@
 # 项目编译(客户端 && 服务端)
 all: smallchat-server smallchat-client
-# 编译参数
+# 编译器
 CC=gcc
+# 编译参数
 CFLAGS=-O2 -Wall -W -std=c99
 
 # 编译 && 运行服务端

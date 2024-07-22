@@ -15,6 +15,8 @@
 #define MAX_CLIENTS 1000
 // 服务端口 
 #define SERVER_PORT 7711
+// 客户端关闭指令
+#define EXIT "exit\n"
 
 // 服务端全局状态数据，启动时由`initChat`函数初始化
 struct chatState *Chat;
@@ -65,9 +67,26 @@ struct client* create_client(int client_fd){
 }
 
 /**
+ * 将消息发送给所有客户端(发送者除外)
+ */
+void sendMessageToAllClientsBut(int sender, char* msg, size_t msg_len){
+    for (int j = 0; j <= Chat->max_client; j++){
+        if (Chat->clients[j] == NULL || Chat->clients[j]->fd == sender) continue;
+        write(Chat->clients[j]->fd, msg, msg_len);
+    }
+}
+
+
+/**
  * 关闭客户端,释放资源.
  */
 void closeClient(struct client* client){
+    Info("Disconnected client fd = %d, nick = %s", client->fd, client->nick_name);
+    // 广播退出通知消息
+    char notify_message[sizeof(client->nick_name) + 24];
+    int notify_len = snprintf(notify_message, sizeof(notify_message), "Player [%s] Quit Chat!\n", client->nick_name);
+    sendMessageToAllClientsBut(client->fd, notify_message, notify_len);
+
     free(client->nick_name);
     close(client->fd);
     Chat->clients[client->fd] = NULL;
@@ -88,15 +107,6 @@ void closeClient(struct client* client){
     free(client);
 }
 
-/**
- * 将消息发送给所有客户端(发送者除外)
- */
-void sendMessageToAllClientsBut(int sender, char* msg, size_t msg_len){
-    for (int j = 0; j <= Chat->max_client; j++){
-        if (Chat->clients[j] == NULL || Chat->clients[j]->fd == sender) continue;
-        write(Chat->clients[j]->fd, msg, msg_len);
-    }
-}
 
 
 /**
@@ -174,9 +184,9 @@ int main(void){
                 write(client->fd, welcome_message, strlen(welcome_message));
                 Info("Connected client fd = %d", fd);
 
-                // 广播通知消息
-                char notify_message[sizeof(client->nick_name) + 32];
-                int notify_len = snprintf(notify_message, sizeof(notify_message), "New player [%s] enter Chat!\n", client->nick_name);
+                // 广播玩家进入通知消息
+                char notify_message[sizeof(client->nick_name) + 24];
+                int notify_len = snprintf(notify_message, sizeof(notify_message), "Player [%s] enter Chat!\n", client->nick_name);
                 sendMessageToAllClientsBut(fd, notify_message, notify_len);
             }
 
@@ -191,16 +201,20 @@ int main(void){
                     int nread = read(j, buf, sizeof(buf) - 1);
                     if (nread <= 0){
                         // 客户端关闭
-                        Info("Disconnected client fd = %d, nick = %s", j, client->nick_name);
                         closeClient(client);
                     }else{
                         buf[nread] = 0;
                         if (buf[0] == '/'){
                             // 发送的是命令，处理命令，目前只支持修改昵称 '/nike'
                         }else{
+                            if (strlen(buf) == strlen(EXIT) && strncmp(buf, EXIT, strlen(EXIT)) == 0) {                                                                // 客户端关闭
+                                closeClient(client);
+                                continue;
+                            }
                             // 发送的是消息，广播给其他客户端
                             // 消息格式： 发送者> 消息内容
-                            char message[256];
+                            // 总消息大小：消息长度 + 昵称长度 + 1(换行符) 
+                            char message[nread + sizeof(client->nick_name) + 1];
                             int message_len = snprintf(message, sizeof(message), "%s> %s", client->nick_name, buf);
                             // snprintf 返回值可能大于 sizeof(message)
                             if (message_len >= (int)sizeof(message)){
