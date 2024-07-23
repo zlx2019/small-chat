@@ -14,9 +14,7 @@
 
 
 
-/** ======================== 底层网络相关函数库  ================================
- *
- * =========================================================================== */
+/** ======================== 底层网络相关函数库  ================================ */
 
 
 /* 创建TCP服务，返回监听文件描述符 */
@@ -137,6 +135,44 @@ int acceptClient(int server_socket){
 }
 
 
+
+/**
+ * 从一个 io 设备中读取数据，放入指定的缓冲区
+ */
+ssize_t Read(int fd, void* buf, size_t len){
+    ssize_t n;
+reset:
+    if ((n = read(fd, buf, len)) == -1){
+        switch (errno){
+        case EINTR:
+            // 被信号打断，重试
+            goto reset;
+        case EAGAIN:
+            // io为非阻塞式,没有数据可读
+            return n;
+        }
+        return -1;
+    }
+    return n;
+}
+
+/**
+ * 将缓冲区的数据，写入到指定的 io 设备中
+ */
+ssize_t Write(int fd, const void* buf, size_t len){
+    ssize_t n;
+reset:
+    if ((n = write(fd, buf, len)) == -1){
+        switch (errno){
+        case EINTR:
+            goto reset;
+        case EAGAIN:
+            return n;
+        }
+        return -1;
+    }
+    return n;
+}
 
 /**
  * 自定义内存分配函数,当内存不足时，则程序直接结束;
