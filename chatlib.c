@@ -105,7 +105,7 @@ int TCPConnect(char* addr, int port, int nonblock){
 
     // 释放服务端地址信息
     freeaddrinfo(servinfo);
-    return retval; /* 如果没有连接成功，则返回 -1 */
+    return retval;
 }
 
 /**

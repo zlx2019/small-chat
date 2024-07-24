@@ -1,6 +1,11 @@
-/**  
- * small-server.c 服务端
+/** server.c -- SmallChat Server
+ * 
+ * 实现聊天室主要逻辑:
+ *  - 接收新的客户端连接
+ *  - 接收客户端发送的消息
+ *  - 将消息转发给其他客户端
  */
+
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -127,12 +132,8 @@ void initChat(void){
 }
 
 /**
- * Server main function
+ * Chat Server
  * 
- * 实现聊天室主要逻辑:
- *  - 接收新的客户端连接
- *  - 接收客户端发送的消息
- *  - 将消息转发给其他客户端
  */
 int main(void){
     // 初始化服务端
