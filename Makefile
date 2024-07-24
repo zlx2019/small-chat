@@ -3,7 +3,7 @@ all: smallchat-server smallchat-client
 # 编译器
 CC=clang
 # 编译参数
-CFLAGS=-O2 -Wall -W -std=c99
+CFLAGS=-O2 -Wall -W -std=gnu99
 
 # 编译 && 运行服务端
 run-server: smallchat-server
