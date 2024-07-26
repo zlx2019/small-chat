@@ -205,8 +205,32 @@ int main(void){
                         closeClient(client);
                     }else{
                         buf[nread] = 0;
+                        // 发送的是命令，处理命令，目前只支持修改昵称 '/nike <>' 
                         if (buf[0] == '/'){
-                            // 发送的是命令，处理命令，目前只支持修改昵称 '/nike'
+                            // 清除尾行的换行符等
+                            char *p;
+                            p = strchr(buf, '\r'); if (p) *p = 0;
+                            p = strchr(buf, '\n'); if (p) *p = 0;
+                            
+                            // 获取客户端要修改的新名称
+                            char *new_nick = strchr(buf, ' ');
+                            if (new_nick){
+                                *new_nick = 0;
+                                new_nick++;
+                            }
+                            if (!strcmp(buf, "/nick") && new_nick){
+                                free(client->nick_name);
+                                int nicklen = strlen(new_nick);
+                                client->nick_name = chatMalloc(nicklen + 1);
+                                memcpy(client->nick_name, new_nick, nicklen + 1);
+                                char *notfiymsg [1];
+                            }
+                            else
+                            {
+                                // 不支持的命令
+                                char *errmsg = "Sorry Unsupported Command.\n";
+                                write(client->fd, errmsg, strlen(errmsg));
+                            }
                         }else{
                             if (strlen(buf) == strlen(EXIT) && strncmp(buf, EXIT, strlen(EXIT)) == 0) {                                                                // 客户端关闭
                                 closeClient(client);

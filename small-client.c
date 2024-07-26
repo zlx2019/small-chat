@@ -32,39 +32,39 @@ void disableRawModelAtExit(void);
  * 设置 raw 模式 or 恢复为默认模式
  */
 int setRawMode(int fd, int enable){
-
     /* 一些全局状态 */
     // 备份终端默认模式，用于结束后恢复原模式
     static struct termios def_terminal;
     // 状态值，用于避免多次执行atexit()
     static int atexit_registered = 0;
     // 是否已经设置为原始模式
-    static int rawmode_is_set = 0;         
+    static int rawmode_is_set = 0;
+
+    struct termios raw;
 
     // 是恢复默认模式
     if (enable == 0){
-        if (rawmode_is_set && tcsetattr(fd, TCSAFLUSH, &def_terminal) != -1){
+        if (rawmode_is_set && tcsetattr(fd, TCSAFLUSH, &def_terminal) != -1)
             rawmode_is_set = 0;
-        }
         return 0;
     }
 
-    // 开启 raw 模式
-    if (isatty(fd))
-        goto fatal;
+    // 检查是否可以开启
+    if (!isatty(fd)) goto fatal;
+
     // 程序终止前，恢复默认模式
-    if (!atexit_registered){
+    if (!atexit_registered) {
         atexit(disableRawModelAtExit);
         atexit_registered = 1;
     }
     // 获取当前模式，保留备份
-    if (tcgetattr(fd, &def_terminal) == -1)
-        goto fatal;
+    if (tcgetattr(fd,&def_terminal) == -1) goto fatal;
+    
 
     // 定义原始模式
-    struct termios raw = def_terminal;
+    raw = def_terminal;
     // 清除部分输入模式标志
-    raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);    
+    raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
     // 设置每个字符数据位为8位
     raw.c_cflag |= (CS8);
     // 清除一些 本地模式标志符
@@ -73,12 +73,10 @@ int setRawMode(int fd, int enable){
     raw.c_cc[VMIN] = 1;
     // 设置非规范模式下，read函数的阻塞超时时长，0表示不会超时，一直阻塞，直到读取到数据
     raw.c_cc[VTIME] = 0;
-
     // 将终端设置为原始模式，并且刷新.
-    if (tcsetattr(fd, TCSAFLUSH, &raw) < 0)
-        goto fatal;
+    if (tcsetattr(fd, TCSAFLUSH, &raw) < 0) goto fatal;
     rawmode_is_set = 1;
-
+    return 0;
 /* 设置 raw 模式失败 */
 fatal:
     errno = ENOTTY;
@@ -110,9 +108,10 @@ void terminalCursorAtRowStart(void){
 /* ============================================================================
  * Custom input buffer
  * ========================================================================== */
+
 #define BUF_MAX 128 
 /**
- * 自定义标准输入缓冲区
+ * 终端标准输入缓冲区，用于缓存标准输入数据
  */
 struct InputBuffer {
     char buf[BUF_MAX];  // 数据缓冲区
@@ -123,11 +122,11 @@ struct InputBuffer {
 /* 一些关于缓冲区操作的状态 */
 #define BUF_ERR  0       // 写入失败，缓冲区不足
 #define BUF_OK   1       // 写入成功
-#define BUF_GOTLINE 2    // 
+#define BUF_GOTLINE 2    // 按下了回车键，将缓冲区数据发送给服务端
 
 
 /**
- * 向缓冲区内添加字符
+ * 将输入的字符，添加到缓冲区
  */
 int inputBufferAppend(struct InputBuffer *buffer, int c){
     if (buffer->len >= BUF_MAX)
@@ -139,7 +138,7 @@ int inputBufferAppend(struct InputBuffer *buffer, int c){
 }
 
 /**
- * 隐藏缓冲区
+ * 将终端当前行内容清除，并跳转到行起始位置.
  */
 void inputBufferHide(struct InputBuffer *buffer){
     (void)buffer;
@@ -148,7 +147,7 @@ void inputBufferHide(struct InputBuffer *buffer){
 }
 
 /**
- * 将缓冲区中的数据，输出到终端中.
+ * 将缓冲区中的数据，输出到终端当前行
  */
 void inputBufferShow(struct InputBuffer *buffer){
     write(fileno(stdout), buffer->buf, buffer->len);
@@ -160,6 +159,36 @@ void inputBufferShow(struct InputBuffer *buffer){
 void inputBufferClear(struct InputBuffer *buffer){
     buffer->len = 0;
     inputBufferHide(buffer);
+}
+
+
+/**
+ * 处理来自键盘的每一个按键事件
+ * 将字符写入缓冲区，然后输出到终端.
+ */
+int inputBufferFeedChar(struct InputBuffer *buffer, int c){
+    switch (c){
+    case '\n':
+        break; // 忽略换行符,不做处理
+    case '\r':
+        // 返回 BUF_GOTLINE 表示用户按下了回车键.
+        return BUF_GOTLINE;
+    case 127:
+        // 退格键，删除缓冲区最后一个字符
+        if (buffer->len > 0){
+            buffer->len--;
+            inputBufferHide(buffer);
+            inputBufferShow(buffer);
+        }
+        break;
+    default:
+        if (inputBufferAppend(buffer, c) == BUF_OK){
+            // 写入缓冲区成功，输出到stdout
+            write(fileno(stdout), buffer->buf + buffer->len - 1, 1);
+        }
+        break;
+    }
+    return BUF_OK;
 }
 
 /**
@@ -183,8 +212,8 @@ int main(int argc, char **args){
     setRawMode(fileno(stdin), 1);
 
     // 定义标准输入缓冲区
-    struct InputBuffer stdin_buf;
-    inputBufferClear(&stdin_buf);
+    struct InputBuffer buffer;
+    inputBufferClear(&buffer);
     
     // 通过select监听 服务端消息 && 标准输入
     fd_set listen_fds;
@@ -200,20 +229,47 @@ int main(int argc, char **args){
             exit(1);
         }else if (num_evnets){
             // 有io事件就绪
-            char buf[128];
+            char lines[128];
+
+            // 服务端事件就绪
             if (FD_ISSET(server, &listen_fds)){
-                // 服务端发送数据
-                ssize_t n = read(server, buf, sizeof(buf));
+                ssize_t n = read(server, lines, sizeof(lines));
                 if (n <= 0){
                     printf("Connection lost\n");
                     exit(1);
                 }
-                // 将当前标准输入缓冲区的数据隐藏
-                // 将当前行
-                inputBufferHide(&stdin_buf);
-                // 输出服务端数据
+                // 清除当前行内容，输出服务端数据
+                // 然后将缓冲区数据，输出到下一行
+                inputBufferHide(&buffer);
+                write(fileno(stdout), lines, n);
+                inputBufferShow(&buffer);
+            }else if (FD_ISSET(stdin_fd, &listen_fds)){
+                // 终端标准输入事件就绪
+                ssize_t n = read(stdin_fd, lines, sizeof(lines));
+                // 处理从终端读取到的所有字符
+                for (int j = 0; j < n; j++){
+                    int res = inputBufferFeedChar(&buffer, lines[j]);
+                    switch (res){
+                    case BUF_GOTLINE:
+                        // 用户按下了 Enter 键
+                        if (buffer.len <= 0){
+                            break;   
+                        }
+                        // 将缓冲区数据 输出到终端 && 发送给服务端
+                        inputBufferAppend(&buffer, '\n');
+                        inputBufferHide(&buffer);
+                        write(fileno(stdout), "you> ", 5);
+                        write(fileno(stdout), buffer.buf, buffer.len);
+                        write(server, buffer.buf, buffer.len);
+                        inputBufferClear(&buffer);
+                        break;
+                    case BUF_OK:
+                        break;
+                    }
+                }
             }
         }
     }
+    close(server);
     return 0;
 }
