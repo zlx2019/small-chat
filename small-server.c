@@ -186,9 +186,9 @@ int main(void){
                 Info("Connected client fd = %d", fd);
 
                 // 广播玩家进入通知消息
-                char notify_message[sizeof(client->nick_name) + 24];
-                int notify_len = snprintf(notify_message, sizeof(notify_message), "Player [%s] enter Chat!\n", client->nick_name);
-                sendMessageToAllClientsBut(fd, notify_message, notify_len);
+                char notify_msg[sizeof(client->nick_name) + 24];
+                int notify_len = snprintf(notify_msg, sizeof(notify_msg), "Player [%s] enter Chat!\n", client->nick_name);
+                sendMessageToAllClientsBut(fd, notify_msg, notify_len);
             }
 
             char buf[256];
@@ -219,16 +219,22 @@ int main(void){
                                 new_nick++;
                             }
                             if (!strcmp(buf, "/nick") && new_nick){
+                                // 构建通知消息
+                                ssize_t old_len = strlen(client->nick_name);
+                                ssize_t new_len = strlen(new_nick);
+                                char notify_msg[30 + old_len + new_len];
+                                int msg_len = snprintf(notify_msg, sizeof(notify_msg), "Player [%s] rename [%s]\n", client->nick_name, new_nick);
+
+                                // 修改客户端昵称
                                 free(client->nick_name);
-                                int nicklen = strlen(new_nick);
-                                client->nick_name = chatMalloc(nicklen + 1);
-                                memcpy(client->nick_name, new_nick, nicklen + 1);
-                                char *notfiymsg [1];
-                            }
-                            else
-                            {
+                                client->nick_name = chatMalloc(new_len + 1);
+                                memcpy(client->nick_name, new_nick, new_len + 1);
+                                char succmsg[] = "\n Rename success.\n\n";
+                                write(client->fd, succmsg, sizeof(succmsg));
+                                sendMessageToAllClientsBut(client->fd, notify_msg, msg_len);
+                            }else{
                                 // 不支持的命令
-                                char *errmsg = "Sorry Unsupported Command.\n";
+                                char *errmsg = "\n Sorry Unsupported Command.\n\n";
                                 write(client->fd, errmsg, strlen(errmsg));
                             }
                         }else{

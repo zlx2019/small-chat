@@ -235,7 +235,7 @@ int main(int argc, char **args){
             if (FD_ISSET(server, &listen_fds)){
                 ssize_t n = read(server, lines, sizeof(lines));
                 if (n <= 0){
-                    printf("Connection lost\n");
+                    printf("Connection exit.\n");
                     exit(1);
                 }
                 // 清除当前行内容，输出服务端数据
