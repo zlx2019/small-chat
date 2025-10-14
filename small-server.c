@@ -181,7 +181,7 @@ int main(void){
                 // 回复欢迎消息
                 char *welcome_message =
                     "Welcome to Small Chat! \n"
-                    "Use /nike <nick> to set your nick. \n";
+                    "Use /nick <nick> to set your nick. \n";
                 write(client->fd, welcome_message, strlen(welcome_message));
                 Info("Connected client fd = %d", fd);
 
